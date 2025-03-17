@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 
+	"github.com/Mitsui515/finsys/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -28,12 +29,18 @@ func InitDB() *gorm.DB {
 	case "warn":
 		logLevel = logger.Warn
 	}
-	DB, err := gorm.Open(sqlite.Open(dbConfig.Path), &gorm.Config{
+	DB, err = gorm.Open(sqlite.Open(dbConfig.Path), &gorm.Config{
 		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		log.Fatalf("cannot connect to database: %v", err)
 	}
+	err = DB.AutoMigrate(&model.Transaction{}, &model.User{})
+	if err != nil {
+		log.Fatalf("fail to automatically migrate: %v", err)
+		return nil
+	}
+	log.Println("successfully init database")
 	return DB
 }
 

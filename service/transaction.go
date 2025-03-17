@@ -1,7 +1,10 @@
 package service
 
 import (
+	"encoding/csv"
 	"errors"
+	"io"
+	"strconv"
 	"time"
 
 	"github.com/Mitsui515/finsys/config"
@@ -49,29 +52,7 @@ type TransactionListResponse struct {
 	Transactions []TransactionResponse `json:"transactions"`
 }
 
-func (s *TransactionService) Create(req *TransactionRequest) (uint, error) {
-	if err := validateTransaction(req); err != nil {
-		return 0, err
-	}
-	transaction := model.Transaction{
-		Type:           req.Type,
-		Amount:         req.Amount,
-		NameOrig:       req.NameOrig,
-		OldBalanceOrig: req.OldBalanceOrig,
-		NewBalanceOrig: req.NewBalanceOrig,
-		NameDest:       req.NameDest,
-		OldBalanceDest: req.OldBalanceDest,
-		NewBalanceDest: req.NewBalanceDest,
-		IsFraud:        false,
-	}
-	if err := config.DB.Create(&transaction).Error; err != nil {
-		return 0, err
-	}
-	go s.predictFraud(&transaction)
-	return transaction.ID, nil
-}
-
-func (*TransactionService) GetByID(id uint) (*TransactionResponse, error) {
+func (s *TransactionService) GetByID(id uint) (*TransactionResponse, error) {
 	var transaction model.Transaction
 	result := config.DB.First(&transaction, id)
 	if result.Error != nil {
@@ -92,6 +73,77 @@ func (*TransactionService) GetByID(id uint) (*TransactionResponse, error) {
 		NewBalanceDest: transaction.NewBalanceDest,
 		CreatedAt:      transaction.CreatedAt,
 	}, nil
+}
+
+func (s *TransactionService) ListByPage(page, size int, transactionType string, startTime, endTime *time.Time) (*TransactionListResponse, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+	offset := (page - 1) * size
+	var transactions []model.Transaction
+	var total int64
+	db := config.DB.Model(&model.Transaction{}).Where("is_deleted = ?", false)
+	if transactionType != "" {
+		db = db.Where("type = ?", transactionType)
+	}
+	if startTime != nil {
+		db = db.Where("created_at >= ?", startTime)
+	}
+	if endTime != nil {
+		db = db.Where("created_at <= ?", endTime)
+	}
+	if err := db.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if err := db.Offset(offset).Limit(size).Order("created_at DESC").Find(&transactions).Error; err != nil {
+		return nil, err
+	}
+	responses := make([]TransactionResponse, len(transactions))
+	for i, transaction := range transactions {
+		responses[i] = TransactionResponse{
+			ID:             transaction.ID,
+			Type:           transaction.Type,
+			Amount:         transaction.Amount,
+			NameOrig:       transaction.NameOrig,
+			OldBalanceOrig: transaction.OldBalanceOrig,
+			NewBalanceOrig: transaction.NewBalanceOrig,
+			NameDest:       transaction.NameDest,
+			OldBalanceDest: transaction.OldBalanceDest,
+			NewBalanceDest: transaction.NewBalanceDest,
+			CreatedAt:      transaction.CreatedAt,
+		}
+	}
+	return &TransactionListResponse{
+		Total:        int(total),
+		Page:         page,
+		Size:         size,
+		Transactions: responses,
+	}, nil
+}
+
+func (s *TransactionService) Create(req *TransactionRequest) (uint, error) {
+	if err := validateTransaction(req); err != nil {
+		return 0, err
+	}
+	transaction := model.Transaction{
+		Type:           req.Type,
+		Amount:         req.Amount,
+		NameOrig:       req.NameOrig,
+		OldBalanceOrig: req.OldBalanceOrig,
+		NewBalanceOrig: req.NewBalanceOrig,
+		NameDest:       req.NameDest,
+		OldBalanceDest: req.OldBalanceDest,
+		NewBalanceDest: req.NewBalanceDest,
+		IsFraud:        false,
+	}
+	if err := config.DB.Create(&transaction).Error; err != nil {
+		return 0, err
+	}
+	go s.predictFraud(&transaction)
+	return transaction.ID, nil
 }
 
 func (s *TransactionService) Update(id uint, req *TransactionRequest) (*TransactionResponse, error) {
@@ -144,6 +196,72 @@ func (s *TransactionService) Delete(id uint) error {
 	}
 	transaction.IsDeleted = true
 	return config.DB.Save(&transaction).Error
+}
+
+func (s *TransactionService) ImportFromCSV(reader io.Reader) (int, error) {
+	csvReader := csv.NewReader(reader)
+	headers, err := csvReader.Read()
+	if err != nil {
+		return 0, err
+	}
+	headerMap := make(map[string]int)
+	for i, h := range headers {
+		headerMap[h] = i
+	}
+	requiredColumns := []string{"type", "amount", "nameOrig", "oldBalanceOrig", "newBalanceOrig", "nameDest", "oldBalanceDest", "newBalanceDest", "isFraud"}
+	for _, col := range requiredColumns {
+		if _, exists := headerMap[col]; !exists {
+			return 0, errors.New("CSV format error, there is no column " + col)
+		}
+	}
+	var transactions []model.Transaction
+	batchSize := 90
+	totalImported := 0
+	for {
+		record, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return totalImported, err
+		}
+		amount, err := strconv.ParseFloat(record[headerMap["amount"]], 64)
+		if err != nil {
+			continue
+		}
+		oldBalanceOrig, _ := strconv.ParseFloat(record[headerMap["oldBalanceOrig"]], 64)
+		newBalanceOrig, _ := strconv.ParseFloat(record[headerMap["newBalanceOrig"]], 64)
+		oldBalanceDest, _ := strconv.ParseFloat(record[headerMap["oldBalanceDest"]], 64)
+		newBalanceDest, _ := strconv.ParseFloat(record[headerMap["newBalanceDest"]], 64)
+		transaction := model.Transaction{
+			Type:           record[headerMap["type"]],
+			Amount:         amount,
+			NameOrig:       record[headerMap["nameOrig"]],
+			OldBalanceOrig: oldBalanceOrig,
+			NewBalanceOrig: newBalanceOrig,
+			NameDest:       record[headerMap["nameDest"]],
+			OldBalanceDest: oldBalanceDest,
+			NewBalanceDest: newBalanceDest,
+			IsFraud:        record[headerMap["isFraud"]] == "1",
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		}
+		transactions = append(transactions, transaction)
+		if len(transactions) >= batchSize {
+			if err := config.DB.CreateInBatches(transactions, batchSize).Error; err != nil {
+				return totalImported, err
+			}
+			totalImported += len(transactions)
+			transactions = transactions[:0]
+		}
+	}
+	if len(transactions) > 0 {
+		if err := config.DB.CreateInBatches(transactions, len(transactions)).Error; err != nil {
+			return totalImported, err
+		}
+		totalImported += len(transactions)
+	}
+	return totalImported, nil
 }
 
 func validateTransaction(req *TransactionRequest) error {
