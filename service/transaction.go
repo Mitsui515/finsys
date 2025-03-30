@@ -9,14 +9,19 @@ import (
 
 	"github.com/Mitsui515/finsys/config"
 	"github.com/Mitsui515/finsys/model"
+	"github.com/Mitsui515/finsys/repository"
 	"github.com/Mitsui515/finsys/utils"
 	"gorm.io/gorm"
 )
 
-type TransactionService struct{}
+type TransactionService struct {
+	transactionRepository repository.TransactionRepository
+}
 
-func NewTransactionService() *TransactionService {
-	return &TransactionService{}
+func NewTransactionService(db *gorm.DB) *TransactionService {
+	return &TransactionService{
+		transactionRepository: repository.NewTransactionRepository(db),
+	}
 }
 
 type TransactionRequest struct {
@@ -53,13 +58,12 @@ type TransactionListResponse struct {
 }
 
 func (s *TransactionService) GetByID(id uint) (*TransactionResponse, error) {
-	var transaction model.Transaction
-	result := config.DB.First(&transaction, id)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	transaction, err := s.transactionRepository.FindByID(id)
+	if err != nil {
+		if err == utils.ErrTransactionNotExists {
 			return nil, utils.ErrTransactionNotExists
 		}
-		return nil, result.Error
+		return nil, err
 	}
 	return &TransactionResponse{
 		ID:             transaction.ID,
@@ -82,23 +86,8 @@ func (s *TransactionService) ListByPage(page, size int, transactionType string, 
 	if size <= 0 {
 		size = 10
 	}
-	offset := (page - 1) * size
-	var transactions []model.Transaction
-	var total int64
-	db := config.DB.Model(&model.Transaction{}).Where("is_deleted = ?", false)
-	if transactionType != "" {
-		db = db.Where("type = ?", transactionType)
-	}
-	if startTime != nil {
-		db = db.Where("created_at >= ?", startTime)
-	}
-	if endTime != nil {
-		db = db.Where("created_at <= ?", endTime)
-	}
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	if err := db.Offset(offset).Limit(size).Order("created_at DESC").Find(&transactions).Error; err != nil {
+	transactions, total, err := s.transactionRepository.List(page, size, transactionType, startTime, endTime)
+	if err != nil {
 		return nil, err
 	}
 	responses := make([]TransactionResponse, len(transactions))
@@ -139,7 +128,7 @@ func (s *TransactionService) Create(req *TransactionRequest) (uint, error) {
 		NewBalanceDest: req.NewBalanceDest,
 		IsFraud:        false,
 	}
-	if err := config.DB.Create(&transaction).Error; err != nil {
+	if err := s.transactionRepository.Create(&transaction); err != nil {
 		return 0, err
 	}
 	go s.predictFraud(&transaction)
@@ -150,13 +139,9 @@ func (s *TransactionService) Update(id uint, req *TransactionRequest) (*Transact
 	if err := validateTransaction(req); err != nil {
 		return nil, err
 	}
-	var transaction model.Transaction
-	result := config.DB.First(&transaction, id)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, utils.ErrTransactionNotExists
-		}
-		return nil, result.Error
+	transaction, err := s.transactionRepository.FindByID(id)
+	if err != nil {
+		return nil, err
 	}
 	transaction.Type = req.Type
 	transaction.Amount = req.Amount
@@ -166,10 +151,10 @@ func (s *TransactionService) Update(id uint, req *TransactionRequest) (*Transact
 	transaction.NameDest = req.NameDest
 	transaction.OldBalanceDest = req.OldBalanceDest
 	transaction.NewBalanceDest = req.NewBalanceDest
-	if err := config.DB.Save(&transaction).Error; err != nil {
+	if err := s.transactionRepository.Update(transaction); err != nil {
 		return nil, err
 	}
-	go s.predictFraud(&transaction)
+	go s.predictFraud(transaction)
 	return &TransactionResponse{
 		ID:             transaction.ID,
 		Type:           transaction.Type,
@@ -186,16 +171,7 @@ func (s *TransactionService) Update(id uint, req *TransactionRequest) (*Transact
 }
 
 func (s *TransactionService) Delete(id uint) error {
-	var transaction model.Transaction
-	result := config.DB.First(&transaction, id)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return utils.ErrTransactionNotExists
-		}
-		return result.Error
-	}
-	transaction.IsDeleted = true
-	return config.DB.Save(&transaction).Error
+	return s.transactionRepository.Delete(id)
 }
 
 func (s *TransactionService) ImportFromCSV(reader io.Reader) (int, error) {
@@ -286,5 +262,5 @@ func (s *TransactionService) predictFraud(transaction *model.Transaction) {
 	} else {
 		transaction.IsFraud = false
 	}
-	config.DB.Save(transaction)
+	s.transactionRepository.Update(transaction)
 }

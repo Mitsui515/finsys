@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Mitsui515/finsys/config"
 	"github.com/Mitsui515/finsys/service"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -18,7 +19,7 @@ type TransactionController struct {
 
 func NewTransactionController() *TransactionController {
 	return &TransactionController{
-		transactionService: service.NewTransactionService(),
+		transactionService: service.NewTransactionService(config.DB),
 	}
 }
 
@@ -203,7 +204,7 @@ func (c *TransactionController) ImportTransactionsHandler(ctx context.Context, r
 		return
 	}
 	defer src.Close()
-	importService := service.NewTransactionService()
+	importService := service.NewTransactionService(config.DB)
 	count, err := importService.ImportFromCSV(src)
 	if err != nil {
 		reqCtx.JSON(consts.StatusInternalServerError, utils.H{
