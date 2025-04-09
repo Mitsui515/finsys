@@ -15,4 +15,7 @@ var (
 	ErrExistedEmail         = errors.New("email has been existed")
 	ErrFalseUsername        = errors.New("username error")
 	ErrFalsePassword        = errors.New("password error")
+	ErrFraudReportNotExists = errors.New("fraud report does not exist")
+	ErrInvalidReport        = errors.New("report content is required")
+	ErrInvalidTransactionID = errors.New("transaction ID is required")
 )
