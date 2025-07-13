@@ -3,6 +3,7 @@ package config
 type AppConfig struct {
 	Server ServerConfig `json:"server"`
 	Log    LogConfig    `json:"log"`
+	LLM    LLMConfig    `json:"llm"`
 }
 
 type ServerConfig struct {
@@ -21,6 +22,10 @@ type LogConfig struct {
 	Compress   bool   `json:"compress"`
 }
 
+type LLMConfig struct {
+	APIKey string `json:"api_key"`
+}
+
 func DefaultConfig() AppConfig {
 	return AppConfig{
 		Server: ServerConfig{
@@ -36,6 +41,9 @@ func DefaultConfig() AppConfig {
 			MaxBackups: 3,
 			MaxAge:     30,
 			Compress:   true,
+		},
+		LLM: LLMConfig{
+			APIKey: "sk-0709296703ab41f280007b5f45b8f9a0",
 		},
 	}
 }

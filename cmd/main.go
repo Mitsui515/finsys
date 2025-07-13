@@ -17,10 +17,10 @@ func main() {
 	if db == nil {
 		log.Fatal("Fail to initial database")
 	}
-	mongodb := config.InitMongoDB()
-	if mongodb == nil {
-		log.Fatal("Fail to initial mongodb")
-	}
+	// mongodb := config.InitMongoDB()
+	// if mongodb == nil {
+	// 	log.Fatal("Fail to initial mongodb")
+	// }
 	hostPort := fmt.Sprintf("%s:%d", appConfig.Server.Host, appConfig.Server.Port)
 	h := server.New(
 		server.WithHostPorts(hostPort),

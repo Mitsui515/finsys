@@ -18,6 +18,7 @@ func RegisterRoutes(h *server.Hertz) {
 	transactionController := controller.NewTransactionController()
 	userController := controller.NewUserController()
 	fraudReportController := controller.NewFraudReportController()
+	chatController := controller.NewChatController()
 	api := h.Group("/api")
 	{
 		auth := api.Group("/auth")
@@ -47,6 +48,10 @@ func RegisterRoutes(h *server.Hertz) {
 			fraudReports.PUT("/:id", fraudReportController.UpdateFraudReportHandler)
 			fraudReports.DELETE("/:id", fraudReportController.DeleteFraudReportHandler)
 			fraudReports.POST("/generate/:transaction_id", fraudReportController.GenerateReportHandler)
+		}
+		chat := api.Group("/chat", middleware.JWTAuth())
+		{
+			chat.POST("", chatController.ChatHandler)
 		}
 	}
 }
