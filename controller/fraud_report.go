@@ -125,16 +125,7 @@ func (c *FraudReportController) UpdateFraudReportHandler(ctx context.Context, re
 		})
 		return
 	}
-	var req service.FraudReportRequest
-	if err := reqCtx.BindJSON(&req); err != nil {
-		reqCtx.JSON(consts.StatusBadRequest, utils.H{
-			"code":    consts.StatusBadRequest,
-			"message": "Bad Request",
-			"details": "Invalid request body",
-		})
-		return
-	}
-	report, err := c.fraudReportService.Update(uint(id), &req)
+	report, err := c.fraudReportService.Update(uint(id))
 	if err != nil {
 		reqCtx.JSON(consts.StatusInternalServerError, utils.H{
 			"code":    consts.StatusInternalServerError,

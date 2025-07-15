@@ -23,8 +23,7 @@ func NewFraudReportService(db *gorm.DB) *FraudReportService {
 }
 
 type FraudReportRequest struct {
-	TransactionID uint   `json:"transaction_id"`
-	Report        string `json:"report"`
+	TransactionID uint `json:"transaction_id"`
 }
 
 type FraudReportResponse struct {
@@ -46,18 +45,18 @@ func (s *FraudReportService) Create(req *FraudReportRequest) (uint, error) {
 	if req.TransactionID == 0 {
 		return 0, utils.ErrInvalidTransactionID
 	}
-	if req.Report == "" {
-		return 0, utils.ErrInvalidReport
-	}
-	_, err := s.transactionRepository.FindByID(req.TransactionID)
+	transaction, err := s.transactionRepository.FindByID(req.TransactionID)
 	if err != nil {
 		return 0, err
 	}
+	_, err = s.fraudReportRepository.FindByTransactionID(req.TransactionID)
+	if err == nil {
+		return 0, errors.New("fraud report for this transaction already exists")
+	}
+	reportContent := generateFraudAnalysisReport(transaction)
 	report := &model.FraudReport{
 		TransactionID: req.TransactionID,
-		Report:        req.Report,
-		GeneratedAt:   time.Now(),
-		UpdatedAt:     time.Now(),
+		Report:        reportContent,
 	}
 	if err := s.fraudReportRepository.Create(report); err != nil {
 		return 0, err
@@ -65,16 +64,16 @@ func (s *FraudReportService) Create(req *FraudReportRequest) (uint, error) {
 	return report.ID, nil
 }
 
-func (s *FraudReportService) Update(id uint, req *FraudReportRequest) (*FraudReportResponse, error) {
-	if req.Report == "" {
-		return nil, utils.ErrInvalidReport
-	}
+func (s *FraudReportService) Update(id uint) (*FraudReportResponse, error) {
 	report, err := s.fraudReportRepository.FindByID(id)
 	if err != nil {
 		return nil, err
 	}
-	report.Report = req.Report
-	report.UpdatedAt = time.Now()
+	transaction, err := s.transactionRepository.FindByID(report.TransactionID)
+	if err != nil {
+		return nil, err
+	}
+	report.Report = generateFraudAnalysisReport(transaction)
 	if err := s.fraudReportRepository.Update(report); err != nil {
 		return nil, err
 	}
