@@ -17,7 +17,7 @@ type FraudReportController struct {
 
 func NewFraudReportController() *FraudReportController {
 	return &FraudReportController{
-		fraudReportService: service.NewFraudReportService(config.DB, config.MongoDB),
+		fraudReportService: service.NewFraudReportService(config.DB),
 	}
 }
 

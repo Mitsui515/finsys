@@ -7,7 +7,6 @@ import (
 	"github.com/Mitsui515/finsys/model"
 	"github.com/Mitsui515/finsys/repository"
 	"github.com/Mitsui515/finsys/utils"
-	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
 
@@ -16,9 +15,9 @@ type FraudReportService struct {
 	transactionRepository repository.TransactionRepository
 }
 
-func NewFraudReportService(db *gorm.DB, mongoDB *mongo.Database) *FraudReportService {
+func NewFraudReportService(db *gorm.DB) *FraudReportService {
 	return &FraudReportService{
-		fraudReportRepository: repository.NewFraudReportRepository(db, mongoDB),
+		fraudReportRepository: repository.NewFraudReportRepository(db),
 		transactionRepository: repository.NewTransactionRepository(db),
 	}
 }
