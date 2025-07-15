@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Mitsui515/finsys/model"
@@ -183,39 +184,38 @@ func (s *FraudReportService) GenerateReport(transactionID uint) (*FraudReportRes
 	}, nil
 }
 
-// TODO
 func generateFraudAnalysisReport(transaction *model.Transaction) string {
 	var result string
-	result = "# 交易欺诈分析报告\n\n"
-	result += "## 交易信息\n\n"
-	result += "- 交易类型: " + transaction.Type + "\n"
-	result += "- 交易金额: " + formatFloat(transaction.Amount) + "\n"
-	result += "- 发起方: " + transaction.NameOrig + "\n"
-	result += "- 接收方: " + transaction.NameDest + "\n\n"
-	result += "## 欺诈风险分析\n\n"
+	result = "# Transaction Fraud Analysis Report\n\n"
+	result += "## Transaction Information\n\n"
+	result += "- Transaction Type: " + transaction.Type + "\n"
+	result += "- Amount: " + formatFloat(transaction.Amount) + "\n"
+	result += "- Originator: " + transaction.NameOrig + "\n"
+	result += "- Destination: " + transaction.NameDest + "\n\n"
+	result += "## Fraud Risk Analysis\n\n"
 	if transaction.Amount > 100000 {
-		result += "- **高风险**: 交易金额异常大 (" + formatFloat(transaction.Amount) + ")\n"
+		result += "- **High Risk**: Unusually large transaction amount (" + formatFloat(transaction.Amount) + ")\n"
 	}
 	origBalanceDiff := transaction.OldBalanceOrig - transaction.NewBalanceOrig
 	if origBalanceDiff != transaction.Amount {
-		result += "- **异常**: 发起方余额变化 (" + formatFloat(origBalanceDiff) + ") 与交易金额不符\n"
+		result += "- **Anomaly**: Originator balance change (" + formatFloat(origBalanceDiff) + ") does not match transaction amount.\n"
 	}
 	destBalanceDiff := transaction.NewBalanceDest - transaction.OldBalanceDest
 	if destBalanceDiff != transaction.Amount {
-		result += "- **异常**: 接收方余额变化 (" + formatFloat(destBalanceDiff) + ") 与交易金额不符\n"
+		result += "- **Anomaly**: Destination balance change (" + formatFloat(destBalanceDiff) + ") does not match transaction amount.\n"
 	}
 	if transaction.NewBalanceOrig < 0 {
-		result += "- **异常**: 发起方新余额为负数\n"
+		result += "- **Anomaly**: Originator's new balance is negative.\n"
 	}
 	if transaction.IsFraud {
-		result += "\n## 结论\n\n此交易被系统标记为**欺诈交易**，欺诈概率为: " + formatFloat(transaction.FraudProbability*100) + "%\n"
+		result += "\n## Conclusion\n\nThis transaction is flagged as **FRAUDULENT** by the system, with a fraud probability of: " + formatFloat(transaction.FraudProbability*100) + "%\n"
 	} else {
-		result += "\n## 结论\n\n此交易被系统判定为**正常交易**，欺诈概率为: " + formatFloat(transaction.FraudProbability*100) + "%\n"
+		result += "\n## Conclusion\n\nThis transaction is determined to be **NORMAL** by the system, with a fraud probability of: " + formatFloat(transaction.FraudProbability*100) + "%\n"
 	}
-	result += "\n生成时间: " + time.Now().Format(time.RFC3339) + "\n"
+	result += "\nGenerated At: " + time.Now().Format(time.RFC3339) + "\n"
 	return result
 }
 
 func formatFloat(num float64) string {
-	return time.Now().Format(time.RFC3339)
+	return fmt.Sprintf("%.2f", num)
 }
