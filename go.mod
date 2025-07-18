@@ -3,8 +3,10 @@ module github.com/Mitsui515/finsys
 go 1.23.1
 
 require (
+	github.com/apache/thrift v0.22.0
 	github.com/cloudwego/hertz v0.9.6
 	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/hertz-contrib/cors v0.1.0
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/crypto v0.36.0
 	gorm.io/driver/sqlite v1.5.7
@@ -20,7 +22,6 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/hertz-contrib/cors v0.1.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect

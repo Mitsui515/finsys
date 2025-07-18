@@ -1,16 +1,20 @@
 package service
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"io"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/Mitsui515/finsys/config"
+	"github.com/Mitsui515/finsys/finsys/fraud"
 	"github.com/Mitsui515/finsys/model"
 	"github.com/Mitsui515/finsys/repository"
 	"github.com/Mitsui515/finsys/utils"
+	"github.com/apache/thrift/lib/go/thrift"
 	"gorm.io/gorm"
 )
 
@@ -257,10 +261,43 @@ func validateTransaction(req *TransactionRequest) error {
 }
 
 func (s *TransactionService) predictFraud(transaction *model.Transaction) {
-	if transaction.Amount > 100000 {
-		transaction.IsFraud = true
-	} else {
-		transaction.IsFraud = false
+	transport, err := thrift.NewTSocket("localhost:9090")
+	if err != nil {
+		log.Fatalf("Error opening socket: %v", err)
+		return
+	}
+	protocolFactory := thrift.NewTBinaryProtocolFactoryDefault()
+	client := fraud.NewFraudServiceClientFactory(transport, protocolFactory)
+
+	if err := transport.Open(); err != nil {
+		log.Printf("ERROR: Could not open transport to Thrift service: %v", err)
+		return
+	}
+	defer transport.Close()
+	thriftTransaction := &fraud.TransactionData{
+		Type:            transaction.Type,
+		Amount:          transaction.Amount,
+		NameOrig:        transaction.NameOrig,
+		OldBalanceOrig:  transaction.OldBalanceOrig,
+		NewBalanceOrig_: transaction.NewBalanceOrig,
+		NameDest:        transaction.NameDest,
+		OldBalanceDest:  transaction.OldBalanceDest,
+		NewBalanceDest_: transaction.NewBalanceDest,
+		Timestamp:       thrift.StringPtr(transaction.CreatedAt.Format(time.RFC3339)),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	prediction, err := client.PredictFraud(ctx, thriftTransaction)
+	if err != nil {
+		log.Printf("ERROR: Failed to get fraud prediction from Thrift service: %v", err)
+		if transaction.Amount > 100000 {
+			transaction.IsFraud = true
+		} else {
+			transaction.IsFraud = false
+		}
+	} else if prediction != nil {
+		transaction.IsFraud = prediction.IsFraud
+		transaction.FraudProbability = prediction.FraudProbability
 	}
 	s.transactionRepository.Update(transaction)
 }
